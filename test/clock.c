@@ -18,6 +18,8 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <time.h>
+#define FORCE_180
+// comment out line above if rotation works
 #include "framebuffer.h"
 #include "glyphs.h"
 
@@ -30,9 +32,6 @@
 #define P24  24
 
 static const unsigned char bitmask[8] = { 128, 64, 32, 16, 8, 4, 2, 1 };
-
-#define FORCE_180
-// comment out line above if rotation works
 
 unsigned char flags = 0x00;
 
@@ -206,7 +205,7 @@ int main(int argc, char* argv[])
 
     fb_clear();
     draw_gstr( 0, 100, ip, White, 1);
-    draw_fstr( 0, 200, ip, White, 2);
+    draw_fstr( 0, 150, ip, Pink, 2);
     draw_fstr( 0, 212, ip, White, 1);
     while (1) {
         time(&now);
@@ -216,7 +215,7 @@ int main(int argc, char* argv[])
             if (flags & bitmask[flip_flop]) { // flip-flop set
                 fb_clear();
                 draw_gstr( 0, 100, ip, White, 1);
-                draw_fstr( 0, 200, ip, White, 2);
+                draw_fstr( 0, 150, ip, Pink, 2);
                 draw_fstr( 0, 212, ip, White, 1);
                 now_tm = localtime(&now);
                 if (flags & bitmask[hrs24_12]) { // 24/12 is 24
