@@ -1,0 +1,5 @@
+*.o
+*.so
+*.a
+test/pi_alarm
+test/pi_alarm_
