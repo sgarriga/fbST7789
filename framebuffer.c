@@ -223,14 +223,14 @@ void draw_char(int x, int y, char ch, unsigned short c, uint8_t chars[],
         for (int i = 0; i < 8; i++) {
             if (row & 0x80) {
                 if (scale != 1)
-                    box(x1 + (scale * i), y + (scale * j), x + (scale * i) + scale, y + (scale * j) + scale, c);
+                    box(x1, y, x1 + scale, y + scale, c);
                 else
                     plot(x1, y, c);
             }
             row = row << 1;
-            x1++;
+            x1 += scale;
         }
-        y++;
+        y += scale;
         x1 = x;
     }
 }
@@ -240,7 +240,7 @@ void draw_fstr(int x, int y, char *s, unsigned short c, unsigned short scale) {
 
     while (s[k]) {
         draw_char(x, y, s[k], c, chars, scale);
-        x += 8 + 1; // 8 pixels wide + 1 pixel gap - per font
+        x += (8 + 1) * scale; // 8 pixels wide + 1 pixel gap - per font
         k++;
     }
 }
