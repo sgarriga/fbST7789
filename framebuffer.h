@@ -27,6 +27,9 @@
 #define GreenYellow     0xAFE5
 #define Pink            0xF81F
 
+extern bool force_180; // set true to rotate screen
+
+
 // basic drawing functions
 void plot(unsigned short x, unsigned short y, unsigned short c);
 

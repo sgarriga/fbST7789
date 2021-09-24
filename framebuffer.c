@@ -30,11 +30,13 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <zlib.h>
+#include <stdbool.h>
 
 #include "glyph_type.h"
 #include "framebuffer.h"
 
 static const unsigned char bitmask[8] = { 128, 64, 32, 16, 8, 4, 2, 1 };
+bool force_180 = false;
 
 // for system font
 #define FONT_FILE "/usr/share/consolefonts/Lat15-VGA8.psf.gz"
@@ -62,10 +64,10 @@ static unsigned short *fb_ptr = NULL;
 void plot(unsigned short x, unsigned short y, unsigned short c) {
     // only plot within screen limits
     if (x < vinfo.xres && y < vinfo.yres) {
-#ifdef FORCE_180
-        x = (vinfo.xres - 1) - x;
-        y = (vinfo.yres - 1) - y;
-#endif
+        if (force_180) {
+            x = (vinfo.xres - 1) - x;
+            y = (vinfo.yres - 1) - y;
+        }
         *(fb_ptr + (y * vinfo.xres) + x) = c;
     }
 }
