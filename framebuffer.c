@@ -190,13 +190,15 @@ void line(unsigned short x0, unsigned short y0,
 void draw_glyph(unsigned short x, unsigned short y, const glyph *g, unsigned short color, unsigned short scale) {
     unsigned short igx, igy;
 
-    for (igy = 0; igy < g->bitshigh; igy++) {
-        for (igx = 0; igx < g->bitswide; igx++) {
-            if (g->data[(igy * ((g->bitswide+7) / 8)) + (igx / 8)] & bitmask[igx % 8])
-                if (scale != 1)
-                    box(x + (scale * igx), y + (scale * igy), x + (scale * igx) + scale, y + (scale * igy) + scale, color);
-                else
-                    plot(x+igx, y+igy, color);
+    if (g->data != (unsigned char *)NULL) {
+        for (igy = 0; igy < g->bitshigh; igy++) {
+            for (igx = 0; igx < g->bitswide; igx++) {
+                if (g->data[(igy * ((g->bitswide+7) / 8)) + (igx / 8)] & bitmask[igx % 8])
+                    if (scale != 1)
+                        box(x + (scale * igx), y + (scale * igy), x + (scale * igx) + scale, y + (scale * igy) + scale, color);
+                    else
+                        plot(x+igx, y+igy, color);
+            }
         }
     }
 }
