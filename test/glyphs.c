@@ -384,6 +384,7 @@ const glyph glyph_7 = { 24, 29, (char *)glyph_char_7 };
 const glyph glyph_8 = { 24, 29, (char *)glyph_char_8 };
 const glyph glyph_9 = { 24, 29, (char *)glyph_char_9 };
 const glyph glyph_0 = { 24, 29, (char *)glyph_char_0 };
+const glyph glyph_space = { 24, 29, (char *)NULL };
 const glyph glyph_colon = { 8, 29, (char *)glyph_char_colon };
 const glyph glyph_period = { 8, 29, (char *)glyph_char_period };
 const glyph glyph_NULL = { 0, 0, (char *)NULL};
@@ -445,6 +446,7 @@ const glyph * char2glyph(char c) {
         case '9': return &glyph_9;
         case ':': return &glyph_colon;
         case '.': return &glyph_period;
+        case ' ': return &glyph_space;
         default:  return &glyph_NULL;
     }
 }

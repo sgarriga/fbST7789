@@ -18,8 +18,8 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <time.h>
-#define FORCE_180
-// comment out line above if rotation works
+#include <stdbool.h>
+
 #include "framebuffer.h"
 #include "glyphs.h"
 
@@ -178,18 +178,25 @@ int main(int argc, char* argv[])
     time_t now, then = 0;
     struct tm *now_tm;
     char now_str[6] = "99:99";
+    char date_str[15] = "";
     char ap_str[3] = "99";
+    const char suffix[4][3] = {"th", "st", "nd", "rd"};;
     int cc = 0;
-    char cs = cs_blu;
+    char color_scheme = cs_red;
     char *ip = NULL;
+    bool refresh = false;
 
-    enum { flip_flop, hrs24_12, btn_a_latch, alarm, btn_b_latch };
+    enum { th, st, nd, rd };
+    char si;
 
+    enum { flip_flop, hrs24_12, btn_a_latch, alarm, btn_b_latch,
+           btn_ab_latch };
     ip = getIP();
 
     // Set up framebuffer
     if (cc = fb_open())
         return(cc);
+    force_180 = true;
 
     // Enable GPIO pins
     if (cc = GPIOExport(P23))
@@ -204,79 +211,110 @@ int main(int argc, char* argv[])
         return(cc);
 
     fb_clear();
-    draw_gstr( 0, 100, ip, White, 1);
-    draw_fstr( 0, 150, ip, Pink, 2);
-    draw_fstr( 0, 212, ip, White, 1);
+    draw_fstr( 0, 230, ip, White, 1);
     while (1) {
         time(&now);
 
-        if (now > then) {
-            flags ^= bitmask[flip_flop]; // next flip-flop
-            if (flags & bitmask[flip_flop]) { // flip-flop set
-                fb_clear();
-                draw_gstr( 0, 100, ip, White, 1);
-                draw_fstr( 0, 150, ip, Pink, 2);
-                draw_fstr( 0, 212, ip, White, 1);
+        if (now > then || refresh) {
+            if (!refresh) {
+                flags ^= bitmask[flip_flop]; // next flip-flop
+                refresh=(flags & bitmask[flip_flop]);
+            }
+            if (refresh) { // because flip-flop set, or forced
+                refresh = false;
+                //fb_clear();
+                //draw_fstr( 0, 230, ip, White, 1);
+                box( 0, 0, 239, 88, Black);
                 now_tm = localtime(&now);
+                strftime(date_str, 14, "%a. %b. %d", now_tm);
+                draw_fstr( 0,  72, date_str, fg1[color_scheme], 2);
+                si = (now_tm->tm_mday == 11 || (now_tm->tm_mday % 10 > 3)) ? 
+                         0 : now_tm->tm_mday % 10;
+                draw_fstr( 215,  72, (char *)suffix[si], fg1[color_scheme], 1);
                 if (flags & bitmask[hrs24_12]) { // 24/12 is 24
-                    strftime(now_str, 6, "%H:%M", now_tm); // 24
-                    draw_glyph(213, 25, &glyph_24, fg1[cs], 2);
+                    strftime(now_str, 5, "%H:%M", now_tm); // 24
+                    draw_glyph(213, 25, &glyph_24, fg1[color_scheme], 2);
                 }
                 else {
                     strftime(now_str, 6, "%I:%M", now_tm); // 12
-                    strftime(ap_str, 3, "%p", now_tm); // 24
+                    if (now_str[0] == '0')
+                        now_str[0] = ' ';
+                    strftime(ap_str, 3, "%p", now_tm);
                     if (ap_str[0] == 'A')
-                        draw_glyph(213,25, &glyph_AM, fg1[cs], 2);
+                        draw_glyph(213,25, &glyph_AM, fg1[color_scheme], 2);
                     else
-                        draw_glyph(213,25, &glyph_PM, fg1[cs], 2);
+                        draw_glyph(213,25, &glyph_PM, fg1[color_scheme], 2);
                 }
-                draw_gstr(0, 5, now_str, fg1[cs], 2);
-                //line(212,   0, 239,   0, Green);
-                //line(212,   0, 212,  63, Green);
-                //line(239,   0, 239,  63, Green);
-                //line(212,  63, 239,  63, Green);
+                draw_gstr(0, 5, now_str, fg1[color_scheme], 2);
             }
             else {
-                draw_glyph(96,5, &glyph_colon, fg2[cs], 2);
+                draw_glyph(96,5, &glyph_colon, fg2[color_scheme], 2);
             }
             then = now;
         }
     
-        if (LOW == GPIORead(P23)) { // button A presssed
-            if (!(flags & bitmask[btn_a_latch])) { // button A not latched?
-                cs++;
-                cs %= 4;
+        if (LOW == GPIORead(P23) && // button A presssed AND
+            LOW == GPIORead(P24)) { // button B pressed
 #if 0
-                box(213, 25, 213 + (glyph_24.bitswide * 2), 
-                       25 + (glyph_24.bitshigh * 2), Black);
-                flags ^= bitmask[hrs24_12]; // toggle ALARM on/off
-                flags |= bitmask[btn_a_latch]; // latch button A
+                color_scheme++;
+                color_scheme %= 4;
 #endif
-            }
+                draw_fstr( 0, 102, "Menu", fg1[color_scheme], 2);
         }
-        else if (flags & bitmask[btn_a_latch]) { // button A latched?
-            flags ^= bitmask[btn_a_latch]; // unlatch button A
-        }
-            
+        else if (LOW == GPIORead(P23) || // button A presssed OR
+                 LOW == GPIORead(P24)) { // button B pressed
 
-        if (LOW == GPIORead(P24)) { // button B pressed
-            if (!(flags & bitmask[btn_b_latch])) { // button B not latched
-                if (flags & bitmask[alarm]) { // ALARM on? (turning off)
-                    draw_glyph(219, 5, &glyph_bell, Black, 2);
+            if (flags & bitmask[btn_ab_latch]) { // button A&B latched?
+                flags ^= bitmask[btn_ab_latch]; // unlatch button A&B
+            }
+
+            if (LOW == GPIORead(P23)) { // button A presssed
+                if (!(flags & bitmask[btn_a_latch])) { // button A not latched?
+                    box(213, 25, 213 + (glyph_24.bitswide * 2), 
+                           25 + (glyph_24.bitshigh * 2), Black);
+                    flags ^= bitmask[hrs24_12]; // toggle  12/24
+                    flags |= bitmask[btn_a_latch]; // latch button A
+
+                    // force refresh
+                    refresh = true;
                 }
-                flags ^= bitmask[alarm]; // toggle ALARM on/off
-                flags |= bitmask[btn_b_latch]; // latch button B
+            }
+            else if (flags & bitmask[btn_a_latch]) { // button A latched?
+                flags ^= bitmask[btn_a_latch]; // unlatch button A
+            }
+
+            if (LOW == GPIORead(P24)) { // button B pressed
+                if (!(flags & bitmask[btn_b_latch])) { // button B not latched
+                    if (flags & bitmask[alarm]) { // ALARM on? (turning off)
+                        draw_glyph(219, 5, &glyph_bell, Black, 2);
+                    }
+                    flags ^= bitmask[alarm]; // toggle ALARM on/off
+                    flags |= bitmask[btn_b_latch]; // latch button B
+                }
+            }
+            else if (flags & bitmask[btn_b_latch]) { // button B latched?
+                flags ^= bitmask[btn_b_latch]; // unlatch button B
+            }
+
+            if (flags & bitmask[alarm]) { // ALARM on?
+                draw_glyph(219, 5, &glyph_bell, al[color_scheme], 2);
             }
         }
-        else if (flags & bitmask[btn_b_latch]) { // button B latched?
-            flags ^= bitmask[btn_b_latch]; // unlatch button B
+        else { // neither pressed
+            if (flags & bitmask[btn_a_latch]) { // button A latched?
+                flags ^= bitmask[btn_a_latch]; // unlatch button A
+            }
+            if (flags & bitmask[btn_b_latch]) { // button B latched?
+                flags ^= bitmask[btn_b_latch]; // unlatch button B
+            }
+            if (flags & bitmask[btn_ab_latch]) { // button A&B latched?
+                flags ^= bitmask[btn_ab_latch]; // unlatch button A&B
+            }
+            if (flags & bitmask[alarm]) { // ALARM on?
+                draw_glyph(219, 5, &glyph_bell, al[color_scheme], 2);
+            }
+            usleep(200);
         }
-
-        if (flags & bitmask[alarm]) { // ALARM on?
-            draw_glyph(219, 5, &glyph_bell, al[cs], 2);
-        }
-
-        usleep(200);
     }
 
     // Disable GPIO pins
