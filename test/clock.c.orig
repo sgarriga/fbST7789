@@ -2,7 +2,6 @@
  ** clock.c
  **
  **/
-#include <gpiod.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -39,6 +38,114 @@ const unsigned short fg1[] = { Red, Green, Blue, Black };
 const unsigned short fg2[] = { Pink, DarkGreen, Navy, Black };
 const unsigned short al[] = { Yellow, Red, Red, Black };
 enum { cs_red, cs_grn, cs_blu, cs_blk };
+
+static int GPIOExport(int pin)
+{
+#define BUFFER_MAX 3
+    char            buffer[BUFFER_MAX];
+    ssize_t         bytes_written;
+    int             fd;
+    int             cc;
+
+    fd = open("/sys/class/gpio/export", O_WRONLY);
+    if (-1 == fd)
+    {
+        cc = errno;
+        printf("Failed to open export for writing!\n");
+        printf("(%s)\n", strerror(cc));
+        return (cc);
+    }
+
+    bytes_written = snprintf(buffer, BUFFER_MAX, "%d", pin);
+    write(fd, buffer, bytes_written);
+    close(fd);
+    return (0);
+}
+
+static int GPIOUnexport(int pin)
+{
+    char            buffer[BUFFER_MAX];
+    ssize_t         bytes_written;
+    int             fd;
+    int             cc;
+
+    fd = open("/sys/class/gpio/unexport", O_WRONLY);
+    if (-1 == fd)
+    {
+        cc = errno;
+        printf("Failed to open unexport for writing!\n");
+        printf("(%s)\n", strerror(cc));
+        return (cc);
+    }
+
+    bytes_written = snprintf(buffer, BUFFER_MAX, "%d", pin);
+    write(fd, buffer, bytes_written);
+    close(fd);
+    return (0);
+}
+
+static int GPIODirection(int pin, int dir)
+{
+    static const char s_dir[2][4] = { "in", "out" };
+
+#define DIRECTION_MAX 35
+    char            path[DIRECTION_MAX];
+    int             fd;
+    int             cc;
+
+    snprintf(path, DIRECTION_MAX, "/sys/class/gpio/gpio%d/direction", pin);
+    fd = open(path, O_WRONLY);
+    if (-1 == fd)
+    {
+        cc == errno;
+        printf("Failed to open gpio direction for writing!\n");
+        printf("(%s)\n", strerror(cc));
+        return (cc);
+    }
+
+    if (-1 == write(fd, s_dir[dir], strlen(s_dir[dir])))
+    {
+        cc == errno;
+        printf("Failed to set direction!\n");
+        printf("(%s)\n", strerror(cc));
+        return (cc);
+    }
+
+    close(fd);
+    return (0);
+}
+
+static int GPIORead(int pin)
+{
+#define VALUE_MAX 30
+    char            path[VALUE_MAX];
+    char            value_str[3];
+    int             fd;
+    int             cc;
+
+    snprintf(path, VALUE_MAX, "/sys/class/gpio/gpio%d/value", pin);
+    fd = open(path, O_RDONLY);
+    if (-1 == fd)
+    {
+        cc = errno;
+        printf("Failed to open gpio pin %02d for reading!\n", pin);
+        printf("(%s)\n", strerror(cc));
+        return (cc);
+    }
+
+    if (-1 == read(fd, value_str, 3))
+    {
+        cc = errno;
+        printf("Failed to read value!\n");
+        printf("(%s)\n", strerror(cc));
+        return (cc);
+    }
+
+    close(fd);
+
+    return (atoi(value_str));
+}
+
 
 static char    *getIP()
 {
@@ -80,9 +187,6 @@ static char    *getIP()
 
 int main(int argc, char *argv[])
 {
-    struct gpiod_chip *chip;
-    struct gpiod_line *gpio_pin[4];
-
     time_t          now,
                     then = 0;
     struct tm      *now_tm;
@@ -119,33 +223,22 @@ int main(int argc, char *argv[])
 
     if (gpio)
     {
-        int cc;
-        chip = gpiod_chip_open_by_name("gpiochip0");
-        if (chip == NULL)
-        {
-            cc = errno;
-            printf("gpiod_chip_open_by_name() returned %d\n", cc);
-            exit(cc);
-        }
+        printf("Set-up GPIO : ");
         // assumes gpio is 2 or 4 when set!
         for (int i = 0, j = (gpio / 4); i < gpio && gpio_set[j][i]; i++)
         {
+            printf(!i ? "%d" : ", %d", gpio_set[j][i]);
             // Enable GPIO pins
-            gpio_pin[i] = gpiod_chip_get_line(chip, gpio_set[j][i]);
-            if (gpio_pin[i] == NULL)
-            {
-                cc = errno;
-                printf("gpiod_chip_get_line(%d) returned %d\n", gpio_set[j][i], cc);
-                exit(cc);
-            }
+            if (cc = GPIOExport(gpio_set[j][i]))
+                return (cc); 
+            printf(" - on");
+
             // Set GPIO directions
-            cc = gpiod_line_request_input(gpio_pin[i], argv[0]);
-            if (cc)
-            {
-                printf("gpiod_line_request_input(%d) returned %d\n", gpio_set[j][i], cc);
-                exit(cc);
-            }
+            if (cc = GPIODirection(gpio_set[j][i], IN))
+                return (cc);
+            printf(", in");
         }
+        printf("\n");
     }
 
     fb_clear();
@@ -204,21 +297,22 @@ int main(int argc, char *argv[])
 
         if (gpio == 2)
         {
-            if (LOW == gpiod_line_get_value(gpio_pin[0])   // button A pressed
-                &&                                         // AND
-                LOW == gpiod_line_get_value(gpio_pin[1]))  // button B pressed
-            {
+            if (LOW == GPIORead(gpio_set[0][0]) &&      // button A
+                // presssed AND
+                LOW == GPIORead(gpio_set[0][1]))
+            {                   // button B pressed
 #if 0
                 color_scheme++;
                 color_scheme %= 4;
 #endif
                 draw_fstr(0, 102, "Menu", fg1[color_scheme], 2);
             }
-            else 
-            if (LOW == gpiod_line_get_value(gpio_pin[0])   // button A pressed
-                ||                                         // OR
-                LOW == gpiod_line_get_value(gpio_pin[1]))  // button B pressed
-            {
+            else if (LOW == GPIORead(gpio_set[0][0]) || // button
+                     // A
+                     // presssed 
+                     // OR
+                     LOW == GPIORead(gpio_set[0][1]))
+            {                   // button B pressed
 
                 if (flags & bitmask[btn_ab_latch])
                 {               // button A&B latched?
@@ -226,8 +320,8 @@ int main(int argc, char *argv[])
                     // A&B
                 }
 
-                if (gpiod_line_get_value(gpio_pin[0]))     // button A pressed
-                {
+                if (LOW == GPIORead(gpio_set[0][0]))
+                {               // button A presssed
                     if (!(flags & bitmask[btn_a_latch]))
                     {           // button A not latched?
                         box(213, 25, 213 + (glyph_24.bitswide * 2),
@@ -245,7 +339,7 @@ int main(int argc, char *argv[])
                     // A
                 }
 
-                if (gpiod_line_get_value(gpio_pin[1]))     // button B pressed
+                if (LOW == GPIORead(gpio_set[0][1]))
                 {               // button B pressed
                     if (!(flags & bitmask[btn_b_latch]))
                     {           // button B not latched
@@ -295,14 +389,11 @@ int main(int argc, char *argv[])
         else if (gpio == 4)
         {
             char str[3];
-            for (int i = 0, val = 0; i < gpio; i++)
+            for (int i = 0; i < gpio; i++)
             {
-                val = gpiod_line_get_value(gpio_pin[i]);
-                if (val < 0)          // error
-                    strcpy(str, "??");
-                else if (HIGH == val) // 1 if button pressed
+                if (LOW == GPIORead(gpio_set[1][i]))
                     sprintf(str, "%02d", gpio_set[1][i]);
-                else                  // 0 if not pressed
+                else
                     strcpy(str, "--");
                 draw_fstr(i * 60, 280, str, fg1[color_scheme], 2);
             }
@@ -313,12 +404,11 @@ int main(int argc, char *argv[])
     if (gpio)
     {
         // assumes gpio is 2 or 4 when set!
-        for (int i = 0; i < gpio; i++)
+        for (int i = 0, j = (gpio / 4); i < gpio && gpio_set[j][i]; i++)
         {
             // Disable GPIO pins
-            gpiod_line_release(gpio_pin[i]);
+            GPIOUnexport(gpio_set[j][i]);
         }
-        gpiod_chip_close(chip);
     }
     // Disconnect framebuffer
     fb_close();
